@@ -90,9 +90,9 @@ const ODDS = [
 export default function App() {
   // Config State (Admin)
   const [config, setConfig] = useState({
-    promoCode: "WIN777",
-    referralLink: "https://melbet.com/registration",
-    downloadLink: "https://melbet.com/mobile",
+    promoCode: "ZS00",
+    referralLink: "https://mlbt.cc/46rK8yJ",
+    downloadLink: "https://mlbt.cc/46kXWdd",
     // Obfuscated password: btoa("161120") -> "MTYxMTIw"
     adminHash: "MTYxMTIw"
   });
