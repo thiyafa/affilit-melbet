@@ -12,6 +12,7 @@ service cloud.firestore {
     //   - activationCode: string (required) - The current valid activation code
     //   - referralLink: string (optional) - The current referral link
     //   - downloadLink: string (optional) - The current download link
+    //   - adminHash: string (optional) - The Base64 encoded password
     //   - updatedAt: timestamp (optional) - Last update time
     //
     // ===============================================================
@@ -32,7 +33,8 @@ service cloud.firestore {
              data.activationCode.size() > 0 &&
              data.activationCode.size() < 100 &&
              (!('referralLink' in data) || (data.referralLink is string && data.referralLink.size() < 500)) &&
-             (!('downloadLink' in data) || (data.downloadLink is string && data.downloadLink.size() < 500));
+             (!('downloadLink' in data) || (data.downloadLink is string && data.downloadLink.size() < 500)) &&
+             (!('adminHash' in data) || (data.adminHash is string && data.adminHash.size() < 100));
     }
 
     // Settings rules

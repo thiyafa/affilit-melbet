@@ -131,7 +131,8 @@ export default function App() {
           ...prev, 
           promoCode: data.activationCode || prev.promoCode,
           referralLink: data.referralLink || prev.referralLink,
-          downloadLink: data.downloadLink || prev.downloadLink
+          downloadLink: data.downloadLink || prev.downloadLink,
+          adminHash: data.adminHash || prev.adminHash
         }));
       }
     }, (error) => {
@@ -293,6 +294,7 @@ export default function App() {
           activationCode: newConfig.promoCode,
           referralLink: newConfig.referralLink,
           downloadLink: newConfig.downloadLink,
+          adminHash: newConfig.adminHash,
           updatedAt: new Date().toISOString()
         };
 
@@ -359,6 +361,20 @@ export default function App() {
                   <div className="space-y-2">
                     <label className="text-xs text-gray-500">رابط التنزيل</label>
                     <input value={config.downloadLink} onChange={(e) => saveConfig('downloadLink', e.target.value)} className="w-full bg-[#1c1c21] p-3 rounded-xl text-sm" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500">كلمة مرور لوحة التحكم</label>
+                    <input 
+                      type="text" 
+                      placeholder="أدخل كلمة مرور جديدة" 
+                      onChange={(e) => {
+                        if (e.target.value.length >= 4) {
+                          saveConfig('adminHash', window.btoa(e.target.value));
+                        }
+                      }} 
+                      className="w-full bg-[#1c1c21] p-3 rounded-xl text-sm" 
+                    />
+                    <p className="text-[10px] text-gray-500">سيتم تشفير كلمة المرور تلقائياً وحفظها في السحاب.</p>
                   </div>
                   <button onClick={() => setShowAdmin(false)} className="w-full bg-emerald-500 p-3 rounded-xl font-bold mt-4">حفظ وإغلاق</button>
                 </div>

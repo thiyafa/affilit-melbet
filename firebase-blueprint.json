@@ -17,6 +17,10 @@
           "type": "string",
           "description": "The current download link for the mobile app."
         },
+        "adminHash": {
+          "type": "string",
+          "description": "The Base64 encoded password for the admin panel."
+        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
