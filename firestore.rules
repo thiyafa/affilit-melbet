@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: settings
+    // Document ID: global
+    // Fields:
+    //   - activationCode: string (required) - The current valid activation code
+    //   - referralLink: string (optional) - The current referral link
+    //   - downloadLink: string (optional) - The current download link
+    //   - updatedAt: timestamp (optional) - Last update time
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "mouhssinthiyafa0@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['activationCode']) &&
+             data.activationCode is string &&
+             data.activationCode.size() > 0 &&
+             data.activationCode.size() < 100 &&
+             (!('referralLink' in data) || (data.referralLink is string && data.referralLink.size() < 500)) &&
+             (!('downloadLink' in data) || (data.downloadLink is string && data.downloadLink.size() < 500));
+    }
+
+    // Settings rules
+    match /settings/global {
+      // Anyone can read the global settings (activation code)
+      allow read: if true;
+      
+      // Only admin can update the activation code
+      allow create, update: if isAdmin() && isValidSettings(request.resource.data);
+      
+      // No one can delete global settings
+      allow delete: if false;
+    }
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

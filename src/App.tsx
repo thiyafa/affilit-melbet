@@ -22,10 +22,65 @@ import {
   X,
   Smartphone
 } from 'lucide-react';
+import { db, auth } from './firebase';
+import { doc, onSnapshot, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+import { getDocFromServer } from 'firebase/firestore';
 
 // Types
 type GameState = 'idle' | 'generating' | 'finished';
 type AppState = 'validation' | 'activating' | 'emulator';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 const ODDS = [
   'x1.23', 'x1.54', 'x1.93', 'x2.41', 'x4.02', 
@@ -35,9 +90,9 @@ const ODDS = [
 export default function App() {
   // Config State (Admin)
   const [config, setConfig] = useState({
-    promoCode: localStorage.getItem('promoCode') || "WIN777",
-    referralLink: localStorage.getItem('referralLink') || "https://melbet.com/registration",
-    downloadLink: localStorage.getItem('downloadLink') || "https://melbet.com/mobile",
+    promoCode: "WIN777",
+    referralLink: "https://melbet.com/registration",
+    downloadLink: "https://melbet.com/mobile",
     // Obfuscated password: btoa("161120") -> "MTYxMTIw"
     adminHash: "MTYxMTIw"
   });
@@ -51,12 +106,58 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminAuth, setAdminAuth] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   const successAudioRef = useRef<HTMLAudioElement | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Track Auth State
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync Promo Code from Firestore
+  useEffect(() => {
+    const docRef = doc(db, 'settings', 'global');
+    
+    // Listen for real-time updates
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setConfig(prev => ({ 
+          ...prev, 
+          promoCode: data.activationCode || prev.promoCode,
+          referralLink: data.referralLink || prev.referralLink,
+          downloadLink: data.downloadLink || prev.downloadLink
+        }));
+      }
+    }, (error) => {
+      // Only log if it's not a permission error for non-admins
+      if (error.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.GET, 'settings/global');
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // Initialize audio and browser check
   useEffect(() => {
+    // Test Firestore Connection
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'settings', 'global'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Firestore is offline. Check configuration.");
+        }
+      }
+    };
+    testConnection();
+
     successAudioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3');
     
     // In-app browser detection and silent exit
@@ -159,19 +260,43 @@ export default function App() {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
-  const handleAdminLogin = () => {
+  const handleAdminLogin = async () => {
     // Compare Base64 of input with the stored hash
     if (window.btoa(passwordInput) === config.adminHash) {
       setAdminAuth(true);
+      
+      // If not logged in with Google, prompt for it to enable Firestore updates
+      if (!currentUser) {
+        try {
+          const provider = new GoogleAuthProvider();
+          await signInWithPopup(auth, provider);
+        } catch (error) {
+          console.error("Auth Error:", error);
+          alert("فشل تسجيل الدخول بجوجل. لن تتمكن من تحديث الكود في السحاب.");
+        }
+      }
     } else {
       alert('كلمة مرور خاطئة');
     }
   };
 
-  const saveConfig = (key: string, value: string) => {
+  const saveConfig = async (key: string, value: string) => {
     const newConfig = { ...config, [key]: value };
     setConfig(newConfig);
-    localStorage.setItem(key, value);
+
+    // Sync to Firestore
+    try {
+      const docRef = doc(db, 'settings', 'global');
+      const updateData: any = { updatedAt: new Date().toISOString() };
+      
+      if (key === 'promoCode') updateData.activationCode = value;
+      if (key === 'referralLink') updateData.referralLink = value;
+      if (key === 'downloadLink') updateData.downloadLink = value;
+
+      await setDoc(docRef, updateData, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/global');
+    }
   };
 
   return (
@@ -207,7 +332,17 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-4 pt-4">
-                  <h3 className="text-lg font-bold mb-4">تعديل الإعدادات</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold">تعديل الإعدادات</h3>
+                    {currentUser && (
+                      <button 
+                        onClick={() => auth.signOut()}
+                        className="text-[10px] text-red-400 border border-red-400/20 px-2 py-1 rounded-lg"
+                      >
+                        خروج ({currentUser.email?.split('@')[0]})
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     <label className="text-xs text-gray-500">كود البرومو</label>
                     <input value={config.promoCode} onChange={(e) => saveConfig('promoCode', e.target.value)} className="w-full bg-[#1c1c21] p-3 rounded-xl text-sm" />

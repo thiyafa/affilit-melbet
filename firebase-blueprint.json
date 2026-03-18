@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application settings like activation codes.",
+      "type": "object",
+      "properties": {
+        "activationCode": {
+          "type": "string",
+          "description": "The current valid activation code for the app."
+        },
+        "referralLink": {
+          "type": "string",
+          "description": "The current referral link for registration."
+        },
+        "downloadLink": {
+          "type": "string",
+          "description": "The current download link for the mobile app."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The last time the code was updated."
+        }
+      },
+      "required": ["activationCode"]
+    }
+  },
+  "firestore": {
+    "/settings/global": {
+      "schema": "Settings",
+      "description": "Global settings document."
+    }
+  }
+}
