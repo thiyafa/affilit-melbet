@@ -284,18 +284,23 @@ export default function App() {
     const newConfig = { ...config, [key]: value };
     setConfig(newConfig);
 
-    // Sync to Firestore
-    try {
-      const docRef = doc(db, 'settings', 'global');
-      const updateData: any = { updatedAt: new Date().toISOString() };
-      
-      if (key === 'promoCode') updateData.activationCode = value;
-      if (key === 'referralLink') updateData.referralLink = value;
-      if (key === 'downloadLink') updateData.downloadLink = value;
+    // Sync to Firestore only if logged in
+    if (currentUser) {
+      try {
+        const docRef = doc(db, 'settings', 'global');
+        // Send the FULL config to ensure security rules (hasAll) are satisfied
+        const fullData = {
+          activationCode: newConfig.promoCode,
+          referralLink: newConfig.referralLink,
+          downloadLink: newConfig.downloadLink,
+          updatedAt: new Date().toISOString()
+        };
 
-      await setDoc(docRef, updateData, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'settings/global');
+        await setDoc(docRef, fullData, { merge: true });
+      } catch (error) {
+        // Log error but don't crash the UI for the admin
+        console.error("Firestore Sync Error:", error);
+      }
     }
   };
 
